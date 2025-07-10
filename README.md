@@ -41,6 +41,7 @@ First Run
 ```giterdone```
 
 If no existing config is found, the tool will guide you through setup:
+
 	1.	Enter your GitHub SSH repo URL (e.g., git@github.com:youruser/yourrepo)
 	2.	Select files or directories to include in the backup
 	3.	Auto-generate and confirm a .gitignore
@@ -57,6 +58,7 @@ Manual Backup
 ```giterdone --run-now```
 
 Other Flags
+
 	•	--init – Re-run the interactive setup wizard
 	•	--status – Print current config
 	•	--dry-run – Simulate the next backup
@@ -71,11 +73,13 @@ Backup run logs are saved to:
 Each log includes timestamps and Git output from each run.
 
 Limitations
+
 	•	SSH is the only supported authentication method
 	•	Does not create GitHub repositories (you must create and initialize it beforehand)
 	•	Config and logs are stored in plaintext
 
 Roadmap
+
 	•	Support for multiple backup profiles
 	•	Encrypted token storage (if future PAT support is reintroduced)
 	•	GitHub repository creation via API
