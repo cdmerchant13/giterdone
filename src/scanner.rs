@@ -4,12 +4,14 @@ use std::fs;
 
 const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
 
-pub fn scan(paths: &[PathBuf]) -> (Vec<PathBuf>, String) {
+pub fn scan(paths: &[PathBuf]) -> (Vec<(PathBuf, PathBuf)>, String) {
     let mut files_to_backup = Vec::new();
     let mut gitignore_patterns = Vec::new();
 
-    for path in paths {
-        let walker = WalkBuilder::new(path)
+    let single_root_mode = paths.len() == 1 && paths[0].is_dir();
+
+    for base_path in paths {
+        let walker = WalkBuilder::new(base_path)
             .standard_filters(true) // Respect .gitignore, .ignore, etc.
             .build();
 
@@ -17,10 +19,15 @@ pub fn scan(paths: &[PathBuf]) -> (Vec<PathBuf>, String) {
             match result {
                 Ok(entry) => {
                     if should_backup(&entry) {
-                        files_to_backup.push(entry.path().to_path_buf());
+                        let relative_path = if single_root_mode {
+                            entry.path().strip_prefix(base_path).unwrap_or(entry.path()).to_path_buf()
+                        } else {
+                            entry.path().strip_prefix(base_path.parent().unwrap_or(base_path)).unwrap_or(entry.path()).to_path_buf()
+                        };
+                        files_to_backup.push((entry.path().to_path_buf(), relative_path));
                     } else if entry.file_type().map_or(false, |ft| ft.is_file()) {
                         // Add to .gitignore if it's a file that should be ignored
-                        if let Some(pattern) = path_to_gitignore_pattern(entry.path(), path) {
+                        if let Some(pattern) = path_to_gitignore_pattern(entry.path(), base_path) {
                             gitignore_patterns.push(pattern);
                         }
                     }

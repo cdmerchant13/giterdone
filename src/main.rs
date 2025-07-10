@@ -104,9 +104,9 @@ fn run_backup(dry_run: bool, logger: &Logger) {
     logger.log(&format!(".gitignore file written to {:?}", gitignore_path)).unwrap();
 
     // 3. Copy the discovered files to the local git repo, preserving structure
-    for file_path in &files_to_backup {
-        if let Err(e) = copy_file_to_repo(file_path, &repo_base_path) {
-            let msg = format!("Failed to copy file {:?}: {}", file_path, e);
+    for (source_path, relative_dest_path) in &files_to_backup {
+        if let Err(e) = copy_file_to_repo(source_path, &repo_base_path, relative_dest_path) {
+            let msg = format!("Failed to copy file {:?}: {}", source_path, e);
             eprintln!("{}", msg);
             logger.log(&msg).unwrap();
         }
@@ -257,9 +257,9 @@ fn get_repo_local_path(repo_url: &str) -> PathBuf {
     dirs::config_dir().unwrap().join("giterdone").join(repo_name)
 }
 
-fn copy_file_to_repo(source_path: &Path, repo_path: &Path) -> io::Result<()> {
+fn copy_file_to_repo(source_path: &Path, repo_path: &Path, relative_dest_path: &Path) -> io::Result<()> {
     // Create a destination path that mirrors the absolute source path
-    let dest_path = repo_path.join(source_path.strip_prefix("/").unwrap_or(source_path));
+    let dest_path = repo_path.join(relative_dest_path);
     
     if let Some(parent) = dest_path.parent() {
         fs::create_dir_all(parent)?;
