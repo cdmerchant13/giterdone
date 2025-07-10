@@ -27,23 +27,23 @@ pub fn ensure_repo(config: &Config, logger: &Logger) -> Result<(), String> {
             .output()
             .map_err(|e| format!("Failed to check remote branches: {}", e))?;
         
-        let remote_branch_exists = String::from_utf8_lossy(&remote_branch_exists.stdout).contains("origin/rust");
+        let remote_branch_exists = String::from_utf8_lossy(&remote_branch_exists.stdout).contains("origin/alt");
 
         if remote_branch_exists {
-            logger.log("Remote 'rust' branch found. Resetting local to remote...").unwrap();
+            logger.log("Remote 'alt' branch found. Resetting local to remote...").unwrap();
             let mut reset_cmd = Command::new("git");
-            reset_cmd.arg("reset").arg("--hard").arg("origin/rust");
+            reset_cmd.arg("reset").arg("--hard").arg("origin/alt");
             execute_git_command_with_dir(reset_cmd, current_dir_command, "reset --hard", logger)?;
         } else {
-            logger.log("Remote 'rust' branch not found. Ensuring local branch is pushed...").unwrap();
-            // Ensure local 'rust' branch exists and is pushed as new upstream
+            logger.log("Remote 'alt' branch not found. Ensuring local branch is pushed...").unwrap();
+            // Ensure local 'alt' branch exists and is pushed as new upstream
             let mut checkout_cmd = Command::new("git");
-            checkout_cmd.arg("checkout").arg("-b").arg("rust");
-            execute_git_command_with_dir(checkout_cmd, current_dir_command, "checkout -b rust", logger).ok(); // Create if not exists
+            checkout_cmd.arg("checkout").arg("-b").arg("alt");
+            execute_git_command_with_dir(checkout_cmd, current_dir_command, "checkout -b alt", logger).ok(); // Create if not exists
             
             let mut push_u_cmd = Command::new("git");
-            push_u_cmd.arg("push").arg("-u").arg("origin").arg("rust");
-            execute_git_command_with_dir(push_u_cmd, current_dir_command, "push -u origin rust", logger)?;
+            push_u_cmd.arg("push").arg("-u").arg("origin").arg("alt");
+            execute_git_command_with_dir(push_u_cmd, current_dir_command, "push -u origin alt", logger)?;
         }
     }
     Ok(())
@@ -111,13 +111,21 @@ fn commit(message: &str, path: &Path, dry_run: bool, logger: &Logger) -> Result<
     if dry_run {
         command.arg("--dry-run");
     }
-    execute_git_command(command, "commit", logger)
+    let result = execute_git_command(command, "commit", logger);
+
+    if let Err(e) = &result {
+        if e.contains("nothing to commit") || e.contains("no changes added to commit") {
+            logger.log("No changes to commit. Treating as successful.").unwrap();
+            return Ok(());
+        }
+    }
+    result
 }
 
 fn push(_config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
     let mut command = Command::new("git");
     command.current_dir(path);
-    command.arg("push").arg("origin").arg("rust");
+    command.arg("push").arg("origin").arg("alt");
 
     // Set GIT_SSH_COMMAND if a custom key path was provided (e.g., id_rsa)
     if let Some(ssh_key_path) = get_ssh_key_path() {
@@ -131,7 +139,7 @@ fn push(_config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
             logger.log("Push rejected due to divergent history. Attempting force push...").unwrap();
             let mut force_command = Command::new("git");
             force_command.current_dir(path);
-            force_command.arg("push").arg("--force").arg("origin").arg("rust");
+            force_command.arg("push").arg("--force").arg("origin").arg("alt");
             if let Some(ssh_key_path) = get_ssh_key_path() {
                 force_command.env("GIT_SSH_COMMAND", format!("ssh -i {}", ssh_key_path.display()));
             }
