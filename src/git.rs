@@ -9,8 +9,42 @@ pub fn ensure_repo(config: &Config, logger: &Logger) -> Result<(), String> {
         logger.log("Local repository not found, cloning...").unwrap();
         clone_repo(config, &repo_path, logger)?;
     } else {
-        logger.log("Local repository found, checking remote...").unwrap();
-        validate_remote(config, &repo_path, logger)?;
+        logger.log("Local repository found, synchronizing with remote...").unwrap();
+        
+        // Change directory to the repository path
+        let current_dir_command = |cmd: &mut Command| { cmd.current_dir(&repo_path); };
+
+        // Fetch latest changes from remote
+        let mut fetch_cmd = Command::new("git");
+        fetch_cmd.arg("fetch").arg("origin");
+        execute_git_command_with_dir(fetch_cmd, current_dir_command, "fetch", logger)?;
+
+        // Check if the remote branch exists
+        let remote_branch_exists = Command::new("git")
+            .current_dir(&repo_path)
+            .arg("branch")
+            .arg("-r")
+            .output()
+            .map_err(|e| format!("Failed to check remote branches: {}", e))?;
+        
+        let remote_branch_exists = String::from_utf8_lossy(&remote_branch_exists.stdout).contains("origin/rust");
+
+        if remote_branch_exists {
+            logger.log("Remote 'rust' branch found. Resetting local to remote...").unwrap();
+            let mut reset_cmd = Command::new("git");
+            reset_cmd.arg("reset").arg("--hard").arg("origin/rust");
+            execute_git_command_with_dir(reset_cmd, current_dir_command, "reset --hard", logger)?;
+        } else {
+            logger.log("Remote 'rust' branch not found. Ensuring local branch is pushed...").unwrap();
+            // Ensure local 'rust' branch exists and is pushed as new upstream
+            let mut checkout_cmd = Command::new("git");
+            checkout_cmd.arg("checkout").arg("-b").arg("rust");
+            execute_git_command_with_dir(checkout_cmd, current_dir_command, "checkout -b rust", logger).ok(); // Create if not exists
+            
+            let mut push_u_cmd = Command::new("git");
+            push_u_cmd.arg("push").arg("-u").arg("origin").arg("rust");
+            execute_git_command_with_dir(push_u_cmd, current_dir_command, "push -u origin rust", logger)?;
+        }
     }
     Ok(())
 }
@@ -80,17 +114,31 @@ fn commit(message: &str, path: &Path, dry_run: bool, logger: &Logger) -> Result<
     execute_git_command(command, "commit", logger)
 }
 
-fn push(config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
+fn push(_config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
     let mut command = Command::new("git");
     command.current_dir(path);
-    command.arg("push");
+    command.arg("push").arg("origin").arg("rust");
 
     // Set GIT_SSH_COMMAND if a custom key path was provided (e.g., id_rsa)
     if let Some(ssh_key_path) = get_ssh_key_path() {
         command.env("GIT_SSH_COMMAND", format!("ssh -i {}", ssh_key_path.display()));
     }
 
-    execute_git_command(command, "push", logger)
+    let result = execute_git_command(command, "push", logger);
+
+    if let Err(e) = &result {
+        if e.contains("rejected") || e.contains("fetch first") {
+            logger.log("Push rejected due to divergent history. Attempting force push...").unwrap();
+            let mut force_command = Command::new("git");
+            force_command.current_dir(path);
+            force_command.arg("push").arg("--force").arg("origin").arg("rust");
+            if let Some(ssh_key_path) = get_ssh_key_path() {
+                force_command.env("GIT_SSH_COMMAND", format!("ssh -i {}", ssh_key_path.display()));
+            }
+            return execute_git_command(force_command, "force push", logger);
+        }
+    }
+    result
 }
 
 fn execute_git_command(mut command: Command, operation: &str, logger: &Logger) -> Result<(), String> {
@@ -107,6 +155,16 @@ fn execute_git_command(mut command: Command, operation: &str, logger: &Logger) -
     }
     logger.log(&format!("git {} successful", operation)).unwrap();
     Ok(())
+}
+
+// Helper function to execute git commands with a custom directory closure
+fn execute_git_command_with_dir<F>(command: Command, dir_setter: F, operation: &str, logger: &Logger) -> Result<(), String>
+where
+    F: FnOnce(&mut Command),
+{
+    let mut cmd = command;
+    dir_setter(&mut cmd);
+    execute_git_command(cmd, operation, logger)
 }
 
 fn convert_https_to_ssh(https_url: &str) -> String {
