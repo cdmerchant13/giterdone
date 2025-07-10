@@ -1,8 +1,3 @@
-Certainly. Here’s a clean, professional README.md tailored for the Rust version of giterdone, reflecting the recent adjustments (specifically, SSH-only authentication and static linking):
-
-⸻
-
-
 # giterdone
 
 `giterdone` is a CLI utility for backing up configuration files and directories to a GitHub repository on a schedule. It’s intended for developers who want to version control local system config, dotfiles, or project scaffolding with minimal friction.
