@@ -87,8 +87,7 @@ Roadmap
 
 License
 
-MIT. Subject to change if the project is expanded for wider use.
-
+MIT- not sure if I want to expand this to a more robust project or not so reserving the right
 ⸻
 
 Contributions and suggestions welcome. Fork it, build on it, or file an issue.
