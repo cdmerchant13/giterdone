@@ -38,7 +38,7 @@ Usage
 
 First Run
 
-`giterdone
+```giterdone```
 
 If no existing config is found, the tool will guide you through setup:
 	1.	Enter your GitHub SSH repo URL (e.g., git@github.com:youruser/yourrepo)
@@ -50,11 +50,11 @@ If no existing config is found, the tool will guide you through setup:
 
 Settings are saved to:
 
-`~/.config/giterdone/config.json
+```~/.config/giterdone/config.json```
 
 Manual Backup
 
-`giterdone --run-now
+```giterdone --run-now```
 
 Other Flags
 	•	--init – Re-run the interactive setup wizard
@@ -66,7 +66,7 @@ Logging
 
 Backup run logs are saved to:
 
-`~/.config/giterdone/logs/
+```~/.config/giterdone/logs/```
 
 Each log includes timestamps and Git output from each run.
 
