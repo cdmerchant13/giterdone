@@ -72,6 +72,14 @@ fn run_backup(dry_run: bool, logger: &Logger) {
         }
     };
 
+    // Ensure SSH setup is complete before proceeding with Git operations
+    if let Err(e) = ensure_ssh_setup(logger) {
+        let msg = format!("SSH setup failed: {}", e);
+        eprintln!("{}", msg);
+        logger.log(&msg).unwrap();
+        return;
+    }
+
     if let Err(e) = git::ensure_repo(&config, logger) {
         let msg = format!("Git repository validation failed: {}", e);
         eprintln!("{}", msg);
@@ -127,13 +135,8 @@ fn setup_wizard(logger: &Logger) -> Result<(), String> {
     let repo_url = prompt("Enter the remote GitHub repository URL (e.g., https://github.com/user/repo.git):")?;
     let auth = AuthMethod::Ssh;
 
-    let setup_ssh = prompt_bool("Do you want to set up an SSH key for this host? (y/n)")?;
-    if setup_ssh {
-        println!("Paste your SSH private key (e.g., content of ~/.ssh/id_rsa). Press Enter twice when done:");
-        let key_content = read_multiline_input()?;
-        ssh::setup_ssh_key(&key_content, logger)?;
-        ssh::add_github_to_known_hosts(logger)?;
-    }
+    // Ensure SSH setup is complete during initial wizard as well
+    ensure_ssh_setup(logger)?;
 
     let files_str = prompt("Enter files or directories to back up (comma-separated absolute paths):")?;
     let files_to_backup: Vec<PathBuf> = files_str.split(',').map(|s| PathBuf::from(s.trim())).collect();
@@ -166,6 +169,53 @@ fn setup_wizard(logger: &Logger) -> Result<(), String> {
     // Initial clone
     git::ensure_repo(&config, logger)?;
     println!("Repository cloned and validated.");
+
+    Ok(())
+}
+
+fn ensure_ssh_setup(logger: &Logger) -> Result<(), String> {
+    let ssh_key_path = dirs::home_dir().map(|home| home.join(".ssh").join("id_rsa"));
+    let known_hosts_path = dirs::home_dir().map(|home| home.join(".ssh").join("known_hosts"));
+
+    let mut key_exists = false;
+    if let Some(path) = &ssh_key_path {
+        if path.exists() {
+            key_exists = true;
+        }
+    }
+
+    let mut github_known = false;
+    if let Some(path) = &known_hosts_path {
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(path) {
+                if content.contains("github.com") {
+                    github_known = true;
+                }
+            }
+        }
+    }
+
+    if !key_exists {
+        println!("\nSSH private key (~/.ssh/id_rsa) not found.");
+        let setup_ssh = prompt_bool("Do you want to provide your SSH private key now? (y/n)")?;
+        if setup_ssh {
+            println!("Paste your SSH private key (e.g., content of ~/.ssh/id_rsa). Press Enter twice when done:");
+            let key_content = read_multiline_input()?;
+            ssh::setup_ssh_key(&key_content, logger)?;
+        } else {
+            return Err("SSH key not provided. Cannot proceed with Git operations.".to_string());
+        }
+    }
+
+    if !github_known {
+        println!("\nGitHub's host key not found in ~/.ssh/known_hosts.");
+        let add_host = prompt_bool("Do you want to add github.com to known_hosts now? (y/n)")?;
+        if add_host {
+            ssh::add_github_to_known_hosts(logger)?;
+        } else {
+            return Err("GitHub's host key not added to known_hosts. Cannot proceed with Git operations.".to_string());
+        }
+    }
 
     Ok(())
 }
