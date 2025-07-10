@@ -1,10 +1,10 @@
 use std::process::{Command, Stdio};
 use std::path::Path;
-use crate::config::Config;
+use crate::config::{Config, AuthMethod};
 use crate::logger::Logger;
 
 pub fn ensure_repo(config: &Config, logger: &Logger) -> Result<(), String> {
-    let repo_path = get_repo_path(config);
+    let repo_path = get_repo_path(&config.repo_url);
     if !repo_path.exists() {
         logger.log("Local repository not found, cloning...").unwrap();
         clone_repo(config, &repo_path, logger)?;
@@ -16,7 +16,7 @@ pub fn ensure_repo(config: &Config, logger: &Logger) -> Result<(), String> {
 }
 
 pub fn add_commit_push(config: &Config, message: &str, dry_run: bool, logger: &Logger) -> Result<(), String> {
-    let repo_path = get_repo_path(config);
+    let repo_path = get_repo_path(&config.repo_url);
     add(&repo_path, logger)?;
     commit(message, &repo_path, dry_run, logger)?;
     if !dry_run {
@@ -25,16 +25,21 @@ pub fn add_commit_push(config: &Config, message: &str, dry_run: bool, logger: &L
     Ok(())
 }
 
-fn get_repo_path(config: &Config) -> std::path::PathBuf {
+fn get_repo_path(repo_url: &str) -> std::path::PathBuf {
     // Heuristic to get a good local repo path from the URL
-    let repo_name = config.repo_url.split('/').last().unwrap_or("giterdone-backup");
+    let repo_name = repo_url.split('/').last().unwrap_or("giterdone-backup");
     let repo_name = repo_name.trim_end_matches(".git");
     dirs::config_dir().unwrap().join("giterdone").join(repo_name)
 }
 
 fn clone_repo(config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
     let mut command = Command::new("git");
-    command.arg("clone").arg(&config.repo_url).arg(path);
+    command.arg("clone");
+
+    let clone_url = match config.auth {
+        AuthMethod::Ssh => convert_https_to_ssh(&config.repo_url),
+    };
+    command.arg(clone_url).arg(path);
     execute_git_command(command, "clone", logger)
 }
 
@@ -43,8 +48,13 @@ fn validate_remote(config: &Config, path: &Path, _logger: &Logger) -> Result<(),
     command.current_dir(path).arg("remote").arg("-v");
     let output = command.output().map_err(|e| format!("Failed to execute git remote: {}", e))?;
     let remote_output = String::from_utf8_lossy(&output.stdout);
-    if !remote_output.contains(&config.repo_url) {
-        return Err(format!("Remote URL mismatch. Expected: {}, Found: {}", config.repo_url, remote_output));
+
+    let expected_url = match config.auth {
+        AuthMethod::Ssh => convert_https_to_ssh(&config.repo_url),
+    };
+
+    if !remote_output.contains(&expected_url) {
+        return Err(format!("Remote URL mismatch. Expected: {}, Found: {}", expected_url, remote_output));
     }
     Ok(())
 }
@@ -69,10 +79,8 @@ fn push(config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
     command.current_dir(path);
     command.arg("push");
 
-    if let crate::config::AuthMethod::Pat(token) = &config.auth {
-        let url = config.repo_url.replace("https://", &format!("https://{}@", token));
-        command.arg(url);
-    }
+    // For SSH, no special URL handling is needed for push if remote is already set up correctly
+    // The remote URL should already be in SSH format from clone_repo
 
     execute_git_command(command, "push", logger)
 }
@@ -91,4 +99,10 @@ fn execute_git_command(mut command: Command, operation: &str, logger: &Logger) -
     }
     logger.log(&format!("git {} successful", operation)).unwrap();
     Ok(())
+}
+
+fn convert_https_to_ssh(https_url: &str) -> String {
+    https_url
+        .replace("https://github.com/", "git@github.com:")
+        .replace(".git", "") // Remove .git if present, as SSH URLs often omit it
 }

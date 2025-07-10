@@ -124,12 +124,7 @@ fn setup_wizard(logger: &Logger) -> Result<(), String> {
     println!("Welcome to giterdone setup!");
 
     let repo_url = prompt("Enter the remote GitHub repository URL (e.g., https://github.com/user/repo.git):")?;
-    let auth_choice = prompt("Choose authentication method (ssh/pat):")?;
-    let auth = match auth_choice.to_lowercase().as_str() {
-        "ssh" => AuthMethod::Ssh,
-        "pat" => AuthMethod::Pat(prompt("Enter your GitHub Personal Access Token:")?),
-        _ => return Err("Invalid authentication method".to_string()),
-    };
+    let auth = AuthMethod::Ssh;
 
     let files_str = prompt("Enter files or directories to back up (comma-separated absolute paths):")?;
     let files_to_backup: Vec<PathBuf> = files_str.split(',').map(|s| PathBuf::from(s.trim())).collect();

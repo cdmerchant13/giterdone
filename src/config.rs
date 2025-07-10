@@ -14,7 +14,6 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum AuthMethod {
     Ssh,
-    Pat(String),
 }
 
 impl Config {
