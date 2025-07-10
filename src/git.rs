@@ -88,21 +88,7 @@ fn clone_repo(config: &Config, path: &Path, logger: &Logger) -> Result<(), Strin
     execute_git_command(command, "clone", logger)
 }
 
-fn validate_remote(config: &Config, path: &Path, _logger: &Logger) -> Result<(), String> {
-    let mut command = Command::new("git");
-    command.current_dir(path).arg("remote").arg("-v");
-    let output = command.output().map_err(|e| format!("Failed to execute git remote: {}", e))?;
-    let remote_output = String::from_utf8_lossy(&output.stdout);
 
-    let expected_url = match config.auth {
-        AuthMethod::Ssh => convert_https_to_ssh(&config.repo_url),
-    };
-
-    if !remote_output.contains(&expected_url) {
-        return Err(format!("Remote URL mismatch. Expected: {}, Found: {}", expected_url, remote_output));
-    }
-    Ok(())
-}
 
 fn add(path: &Path, logger: &Logger) -> Result<(), String> {
     let mut command = Command::new("git");
