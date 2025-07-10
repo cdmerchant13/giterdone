@@ -4,6 +4,7 @@ mod git;
 mod logger;
 mod scanner;
 mod scheduler;
+mod ssh;
 
 use crate::logger::Logger;
 use chrono::Local;
@@ -126,6 +127,14 @@ fn setup_wizard(logger: &Logger) -> Result<(), String> {
     let repo_url = prompt("Enter the remote GitHub repository URL (e.g., https://github.com/user/repo.git):")?;
     let auth = AuthMethod::Ssh;
 
+    let setup_ssh = prompt_bool("Do you want to set up an SSH key for this host? (y/n)")?;
+    if setup_ssh {
+        println!("Paste your SSH private key (e.g., content of ~/.ssh/id_rsa). Press Enter twice when done:");
+        let key_content = read_multiline_input()?;
+        ssh::setup_ssh_key(&key_content, logger)?;
+        ssh::add_github_to_known_hosts(logger)?;
+    }
+
     let files_str = prompt("Enter files or directories to back up (comma-separated absolute paths):")?;
     let files_to_backup: Vec<PathBuf> = files_str.split(',').map(|s| PathBuf::from(s.trim())).collect();
 
@@ -166,6 +175,30 @@ fn prompt(message: &str) -> Result<String, String> {
     io::stdout().flush().map_err(|e| format!("Failed to flush stdout: {}", e))?;
     let mut input = String::new();
     io::stdin().read_line(&mut input).map_err(|e| format!("Failed to read input: {}", e))?;
+    Ok(input.trim().to_string())
+}
+
+fn prompt_bool(message: &str) -> Result<bool, String> {
+    loop {
+        let input = prompt(message)?.to_lowercase();
+        match input.as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            _ => println!("Invalid input. Please enter 'y' or 'n'."),
+        }
+    }
+}
+
+fn read_multiline_input() -> Result<String, String> {
+    let mut input = String::new();
+    loop {
+        let mut line = String::new();
+        io::stdin().read_line(&mut line).map_err(|e| format!("Failed to read input: {}", e))?;
+        if line.trim().is_empty() {
+            break;
+        }
+        input.push_str(&line);
+    }
     Ok(input.trim().to_string())
 }
 

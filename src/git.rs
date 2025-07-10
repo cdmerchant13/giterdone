@@ -1,5 +1,5 @@
 use std::process::{Command, Stdio};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use crate::config::{Config, AuthMethod};
 use crate::logger::Logger;
 
@@ -40,6 +40,12 @@ fn clone_repo(config: &Config, path: &Path, logger: &Logger) -> Result<(), Strin
         AuthMethod::Ssh => convert_https_to_ssh(&config.repo_url),
     };
     command.arg(clone_url).arg(path);
+    
+    // Set GIT_SSH_COMMAND if a custom key path was provided (e.g., id_rsa)
+    if let Some(ssh_key_path) = get_ssh_key_path() {
+        command.env("GIT_SSH_COMMAND", format!("ssh -i {}", ssh_key_path.display()));
+    }
+
     execute_git_command(command, "clone", logger)
 }
 
@@ -79,8 +85,10 @@ fn push(config: &Config, path: &Path, logger: &Logger) -> Result<(), String> {
     command.current_dir(path);
     command.arg("push");
 
-    // For SSH, no special URL handling is needed for push if remote is already set up correctly
-    // The remote URL should already be in SSH format from clone_repo
+    // Set GIT_SSH_COMMAND if a custom key path was provided (e.g., id_rsa)
+    if let Some(ssh_key_path) = get_ssh_key_path() {
+        command.env("GIT_SSH_COMMAND", format!("ssh -i {}", ssh_key_path.display()));
+    }
 
     execute_git_command(command, "push", logger)
 }
@@ -105,4 +113,9 @@ fn convert_https_to_ssh(https_url: &str) -> String {
     https_url
         .replace("https://github.com/", "git@github.com:")
         .replace(".git", "") // Remove .git if present, as SSH URLs often omit it
+}
+
+// Helper to get the default SSH key path
+fn get_ssh_key_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".ssh").join("id_rsa"))
 }
